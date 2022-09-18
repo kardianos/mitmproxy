@@ -8,17 +8,21 @@ import (
 )
 
 func TestGetStorePath(t *testing.T) {
-	path, err := getStorePath("")
+	l, err := NewPathLoader("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if path == "" {
+	if l.StorePath == "" {
 		t.Fatal("should have path")
 	}
 }
 
 func TestNewCA(t *testing.T) {
-	ca, err := NewCA("")
+	l, err := NewPathLoader("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca, err := New(l)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,12 +30,12 @@ func TestNewCA(t *testing.T) {
 	data := make([]byte, 0)
 	buf := bytes.NewBuffer(data)
 
-	err = ca.saveTo(buf)
+	err = l.saveTo(buf, &ca.PrivateKey, &ca.RootCert)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fileContent, err := ioutil.ReadFile(ca.caFile())
+	fileContent, err := ioutil.ReadFile(l.caFile())
 	if err != nil {
 		t.Fatal(err)
 	}

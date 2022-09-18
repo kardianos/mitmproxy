@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lqqyt2423/go-mitmproxy/proxy"
+	"github.com/kardianos/mitmproxy/proxy"
 	log "github.com/sirupsen/logrus"
 )
 

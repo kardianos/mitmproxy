@@ -22,7 +22,7 @@ var normalErrMsgs []string = []string{
 	"use of closed network connection",
 }
 
-// 仅打印预料之外的错误信息
+// Only print unexpected error messages.
 func logErr(log *log.Entry, err error) (loged bool) {
 	msg := err.Error()
 
@@ -38,7 +38,7 @@ func logErr(log *log.Entry, err error) (loged bool) {
 	return
 }
 
-// 转发流量
+// Forward traffic.
 func transfer(log *log.Entry, server, client io.ReadWriteCloser) {
 	done := make(chan struct{})
 	defer close(done)
@@ -76,14 +76,14 @@ func transfer(log *log.Entry, server, client io.ReadWriteCloser) {
 	for i := 0; i < 2; i++ {
 		if err := <-errChan; err != nil {
 			logErr(log, err)
-			return // 如果有错误，直接返回
+			return
 		}
 	}
 }
 
-// 尝试将 Reader 读取至 buffer 中
-// 如果未达到 limit，则成功读取进入 buffer
-// 否则 buffer 返回 nil，且返回新 Reader，状态为未读取前
+// Try to read Reader into the buffer.
+// If the buffer limit size is reached then read from buffered data and rest of connection.
+// Otherwise just return buffer.
 func readerToBuffer(r io.Reader, limit int64) ([]byte, io.Reader, error) {
 	buf := bytes.NewBuffer(make([]byte, 0))
 	lr := io.LimitReader(r, limit)
@@ -93,21 +93,21 @@ func readerToBuffer(r io.Reader, limit int64) ([]byte, io.Reader, error) {
 		return nil, nil, err
 	}
 
-	// 达到上限
+	// If limit is reached.
 	if int64(buf.Len()) == limit {
-		// 返回新的 Reader
+		// Return new Reader.
 		return nil, io.MultiReader(bytes.NewBuffer(buf.Bytes()), r), nil
 	}
 
-	// 返回 buffer
+	// Return buffer.
 	return buf.Bytes(), nil, nil
 }
 
-// Wireshark 解析 https 设置
+// Wireshark parse https setup.
 var tlsKeyLogWriter io.Writer
 var tlsKeyLogOnce sync.Once
 
-func getTlsKeyLogWriter() io.Writer {
+func getTLSKeyLogWriter() io.Writer {
 	tlsKeyLogOnce.Do(func() {
 		logfile := os.Getenv("SSLKEYLOGFILE")
 		if logfile == "" {

@@ -12,13 +12,13 @@ import (
 
 // flow http request
 type Request struct {
-	Method string
-	URL    *url.URL
-	Proto  string
-	Header http.Header
-	Body   []byte
+	Method string      `json:"method"`
+	URL    *url.URL    `json:"url"`
+	Proto  string      `json:"proto"`
+	Header http.Header `json:"header"`
+	Body   []byte      `json:"-"`
 
-	raw *http.Request
+	raw *http.Request `json:"-"`
 }
 
 func newRequest(req *http.Request) *Request {
@@ -36,16 +36,11 @@ func (r *Request) Raw() *http.Request {
 }
 
 func (req *Request) MarshalJSON() ([]byte, error) {
-	r := make(map[string]interface{})
-	r["method"] = req.Method
-	r["url"] = req.URL.String()
-	r["proto"] = req.Proto
-	r["header"] = req.Header
-	return json.Marshal(r)
+	return json.Marshal(req)
 }
 
 func (req *Request) UnmarshalJSON(data []byte) error {
-	r := make(map[string]interface{})
+	r := make(map[string]any)
 	err := json.Unmarshal(data, &r)
 	if err != nil {
 		return err
@@ -60,14 +55,14 @@ func (req *Request) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	rawheader, ok := r["header"].(map[string]interface{})
+	rawheader, ok := r["header"].(map[string]any)
 	if !ok {
 		return errors.New("rawheader parse error")
 	}
 
 	header := make(map[string][]string)
 	for k, v := range rawheader {
-		vals, ok := v.([]interface{})
+		vals, ok := v.([]any)
 		if !ok {
 			return errors.New("header parse error")
 		}
@@ -136,7 +131,7 @@ func (f *Flow) finish() {
 }
 
 func (f *Flow) MarshalJSON() ([]byte, error) {
-	j := make(map[string]interface{})
+	j := make(map[string]any)
 	j["id"] = f.Id
 	j["request"] = f.Request
 	j["response"] = f.Response

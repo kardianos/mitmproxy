@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
-	"github.com/lqqyt2423/go-mitmproxy/proxy"
+	"github.com/kardianos/mitmproxy/proxy"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -39,7 +39,7 @@ func (c *concurrentConn) trySendConnMessage(f *proxy.Flow) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	key := f.ConnContext.Id().String()
+	key := f.ConnContext.ID().String()
 	if send := c.sendConnMessageMap[key]; send {
 		return
 	}
@@ -56,7 +56,7 @@ func (c *concurrentConn) whenConnClose(connCtx *proxy.ConnContext) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	delete(c.sendConnMessageMap, connCtx.Id().String())
+	delete(c.sendConnMessageMap, connCtx.ID().String())
 
 	msg := newMessageConnClose(connCtx)
 	err := c.conn.WriteMessage(websocket.BinaryMessage, msg.bytes())
@@ -128,7 +128,7 @@ func (c *concurrentConn) initWaitChan(key string) chan interface{} {
 	return ch
 }
 
-// 是否拦截
+// Determine if it should intercept.
 func (c *concurrentConn) isIntercpt(f *proxy.Flow, after *messageFlow) bool {
 	if after.mType != messageTypeRequestBody && after.mType != messageTypeResponseBody {
 		return false
@@ -163,12 +163,12 @@ func (c *concurrentConn) isIntercpt(f *proxy.Flow, after *messageFlow) bool {
 	return false
 }
 
-// 拦截
+// Intercept.
 func (c *concurrentConn) waitIntercept(f *proxy.Flow, after *messageFlow) {
 	ch := c.initWaitChan(f.Id.String())
 	msg := (<-ch).(*messageEdit)
 
-	// drop
+	// Drop.
 	if msg.mType == messageTypeDropRequest || msg.mType == messageTypeDropResponse {
 		f.Response = &proxy.Response{
 			StatusCode: 502,

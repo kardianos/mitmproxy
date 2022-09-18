@@ -8,11 +8,11 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/lqqyt2423/go-mitmproxy/cert"
+	"github.com/kardianos/mitmproxy/cert"
 	log "github.com/sirupsen/logrus"
 )
 
-// 模拟了标准库中 server 运行，目的是仅通过当前进程内存转发 socket 数据，不需要经过 tcp 或 unix socket
+// Similar to standard library server, run through current process memory socket data, without tcp or unix socket.
 
 type pipeAddr struct {
 	remoteAddr string
@@ -55,7 +55,7 @@ func (c *pipeConn) RemoteAddr() net.Addr {
 	return &pipeAddr{remoteAddr: c.remoteAddr}
 }
 
-// 建立客户端和服务端通信的通道
+// Setup client and server communication.
 func newPipes(req *http.Request) (net.Conn, *pipeConn) {
 	client, srv := net.Pipe()
 	server := newPipeConn(srv, req)
@@ -82,20 +82,15 @@ func (l *middleListener) Addr() net.Addr { return nil }
 // middle: man-in-the-middle server
 type middle struct {
 	proxy    *Proxy
-	ca       *cert.CA
+	ca       cert.Getter
 	listener *middleListener
 	server   *http.Server
 }
 
 func newMiddle(proxy *Proxy) (*middle, error) {
-	ca, err := cert.NewCA(proxy.Opts.CaRootPath)
-	if err != nil {
-		return nil, err
-	}
-
 	m := &middle{
 		proxy: proxy,
-		ca:    ca,
+		ca:    proxy.Opts.CA,
 		listener: &middleListener{
 			connChan: make(chan net.Conn),
 			doneChan: make(chan struct{}),
@@ -107,9 +102,9 @@ func newMiddle(proxy *Proxy) (*middle, error) {
 		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
 			return context.WithValue(ctx, connContextKey, c.(*tls.Conn).NetConn().(*pipeConn).connContext)
 		},
-		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)), // disable http2
+		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler)), // Disable http2.
 		TLSConfig: &tls.Config{
-			SessionTicketsDisabled: true, // 设置此值为 true ，确保每次都会调用下面的 GetCertificate 方法
+			SessionTicketsDisabled: true, // Set to true, ensure GetCertificate is always called.
 			GetCertificate: func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 				connCtx := clientHello.Context().Value(connContextKey).(*ConnContext)
 				if err := connCtx.tlsHandshake(clientHello); err != nil {
@@ -120,7 +115,7 @@ func newMiddle(proxy *Proxy) (*middle, error) {
 					addon.TlsEstablishedServer(connCtx)
 				}
 
-				return ca.GetCert(clientHello.ServerName)
+				return m.ca.GetCert(clientHello.ServerName)
 			},
 		},
 	}
@@ -166,9 +161,9 @@ func (m *middle) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	m.proxy.ServeHTTP(res, req)
 }
 
-// 解析 connect 流量
-// 如果是 tls 流量，则进入 listener.Accept => Middle.ServeHTTP
-// 否则很可能是 ws 流量
+// Parse connect flow.
+// In case of tls flow, listener.Accept => Middle.ServeHTTP
+// Otherwise assume ws flow.
 func (m *middle) intercept(pipeServerConn *pipeConn) {
 	buf, err := pipeServerConn.Peek(3)
 	if err != nil {
@@ -180,7 +175,7 @@ func (m *middle) intercept(pipeServerConn *pipeConn) {
 	// https://github.com/mitmproxy/mitmproxy/blob/main/mitmproxy/net/tls.py is_tls_record_magic
 	if buf[0] == 0x16 && buf[1] == 0x03 && buf[2] <= 0x03 {
 		// tls
-		pipeServerConn.connContext.ClientConn.Tls = true
+		pipeServerConn.connContext.ClientConn.TLS = true
 		pipeServerConn.connContext.initHttpsServerConn()
 		m.listener.connChan <- pipeServerConn
 	} else {

@@ -18,32 +18,37 @@ import (
 
 // client connection
 type ClientConn struct {
-	Id   uuid.UUID
-	Conn net.Conn
-	Tls  bool
+	ID   uuid.UUID       `json:"id"`
+	Conn *wrapClientConn `json:"-"`
+	TLS  bool            `json:"tls"`
 }
 
-func newClientConn(c net.Conn) *ClientConn {
+func newClientConn(c *wrapClientConn) *ClientConn {
 	return &ClientConn{
-		Id:   uuid.NewV4(),
+		ID:   uuid.NewV4(),
 		Conn: c,
-		Tls:  false,
+		TLS:  false,
 	}
 }
 
 func (c *ClientConn) MarshalJSON() ([]byte, error) {
-	m := make(map[string]interface{})
-	m["id"] = c.Id
-	m["tls"] = c.Tls
-	m["address"] = c.Conn.RemoteAddr().String()
+	m := struct {
+		ID      uuid.UUID `json:"id"`
+		Address string    `json:"address"`
+		TLS     bool      `json:"tls"`
+	}{
+		ID:      c.ID,
+		Address: c.Conn.RemoteAddr().String(),
+		TLS:     c.TLS,
+	}
 	return json.Marshal(m)
 }
 
 // server connection
 type ServerConn struct {
-	Id      uuid.UUID
-	Address string
-	Conn    net.Conn
+	ID      uuid.UUID `json:"id"`
+	Address string    `json:"address"`
+	Conn    net.Conn  `json:"-"`
 
 	tlsHandshaked   chan struct{}
 	tlsHandshakeErr error
@@ -54,20 +59,25 @@ type ServerConn struct {
 
 func newServerConn() *ServerConn {
 	return &ServerConn{
-		Id:            uuid.NewV4(),
+		ID:            uuid.NewV4(),
 		tlsHandshaked: make(chan struct{}),
 	}
 }
 
 func (c *ServerConn) MarshalJSON() ([]byte, error) {
-	m := make(map[string]interface{})
-	m["id"] = c.Id
-	m["address"] = c.Address
-	m["peername"] = c.Conn.RemoteAddr().String()
+	m := struct {
+		ID       uuid.UUID `json:"id"`
+		Address  string    `json:"address"`
+		PeerName string    `json:"peername"`
+	}{
+		ID:       c.ID,
+		Address:  c.Address,
+		PeerName: c.Conn.LocalAddr().String(),
+	}
 	return json.Marshal(m)
 }
 
-func (c *ServerConn) TlsState() *tls.ConnectionState {
+func (c *ServerConn) TLSState() *tls.ConnectionState {
 	<-c.tlsHandshaked
 	return c.tlsState
 }
@@ -85,7 +95,7 @@ type ConnContext struct {
 	closeAfterResponse bool // after http response, http server will close the connection
 }
 
-func newConnContext(c net.Conn, proxy *Proxy) *ConnContext {
+func newConnContext(c *wrapClientConn, proxy *Proxy) *ConnContext {
 	clientConn := newClientConn(c)
 	return &ConnContext{
 		ClientConn: clientConn,
@@ -93,15 +103,15 @@ func newConnContext(c net.Conn, proxy *Proxy) *ConnContext {
 	}
 }
 
-func (connCtx *ConnContext) Id() uuid.UUID {
-	return connCtx.ClientConn.Id
+func (connCtx *ConnContext) ID() uuid.UUID {
+	return connCtx.ClientConn.ID
 }
 
 func (connCtx *ConnContext) initHttpServerConn() {
 	if connCtx.ServerConn != nil {
 		return
 	}
-	if connCtx.ClientConn.Tls {
+	if connCtx.ClientConn.TLS {
 		return
 	}
 
@@ -131,12 +141,12 @@ func (connCtx *ConnContext) initHttpServerConn() {
 			ForceAttemptHTTP2:  false, // disable http2
 			DisableCompression: true,  // To get the original response from the server, set Transport.DisableCompression to true.
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: connCtx.proxy.Opts.SslInsecure,
-				KeyLogWriter:       getTlsKeyLogWriter(),
+				InsecureSkipVerify: connCtx.proxy.Opts.InsecureSkipVerifyTLS,
+				KeyLogWriter:       getTLSKeyLogWriter(),
 			},
 		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			// 禁止自动重定向
+			// Disable automatic redirects.
 			return http.ErrUseLastResponse
 		},
 	}
@@ -229,7 +239,7 @@ func getProxyConn(proxyUrl *url.URL, address string) (net.Conn, error) {
 }
 
 func (connCtx *ConnContext) initHttpsServerConn() {
-	if !connCtx.ClientConn.Tls {
+	if !connCtx.ClientConn.TLS {
 		return
 	}
 	connCtx.ServerConn.client = &http.Client{
@@ -242,7 +252,7 @@ func (connCtx *ConnContext) initHttpsServerConn() {
 			DisableCompression: true,  // To get the original response from the server, set Transport.DisableCompression to true.
 		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			// 禁止自动重定向
+			// Disable automatic redirects.
 			return http.ErrUseLastResponse
 		},
 	}
@@ -250,8 +260,8 @@ func (connCtx *ConnContext) initHttpsServerConn() {
 
 func (connCtx *ConnContext) tlsHandshake(clientHello *tls.ClientHelloInfo) error {
 	cfg := &tls.Config{
-		InsecureSkipVerify: connCtx.proxy.Opts.SslInsecure,
-		KeyLogWriter:       getTlsKeyLogWriter(),
+		InsecureSkipVerify: connCtx.proxy.Opts.InsecureSkipVerifyTLS,
+		KeyLogWriter:       getTLSKeyLogWriter(),
 		ServerName:         clientHello.ServerName,
 		NextProtos:         []string{"http/1.1"}, // todo: h2
 		// CurvePreferences:   clientHello.SupportedCurves, // todo: 如果打开会出错
@@ -357,13 +367,12 @@ func (c *wrapServerConn) Close() error {
 		addon.ServerDisconnected(c.connCtx)
 	}
 
-	if !c.connCtx.ClientConn.Tls {
-		c.connCtx.ClientConn.Conn.(*wrapClientConn).Conn.(*net.TCPConn).CloseRead()
-	} else {
-		// if keep-alive connection close
-		if !c.connCtx.closeAfterResponse {
-			c.connCtx.pipeConn.Close()
-		}
+	if !c.connCtx.ClientConn.TLS {
+		c.connCtx.ClientConn.Conn.Conn.(*net.TCPConn).CloseRead()
+		return c.closeErr
+	}
+	if !c.connCtx.closeAfterResponse {
+		c.connCtx.pipeConn.Close()
 	}
 
 	return c.closeErr

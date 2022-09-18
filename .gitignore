@@ -1,7 +1,0 @@
-.DS_Store
-.env
-/go-mitmproxy
-/dummycert
-/.idea
-dist/
-.vscode

@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
-	"github.com/lqqyt2423/go-mitmproxy/proxy"
+	"github.com/kardianos/mitmproxy/proxy"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -123,7 +123,7 @@ func (web *WebAddon) sendFlow(f *proxy.Flow, msgFn func() *messageFlow) bool {
 }
 
 func (web *WebAddon) Requestheaders(f *proxy.Flow) {
-	if f.ConnContext.ClientConn.Tls {
+	if f.ConnContext.ClientConn.TLS {
 		web.forEachConn(func(c *concurrentConn) {
 			c.trySendConnMessage(f)
 		})
@@ -141,7 +141,7 @@ func (web *WebAddon) Request(f *proxy.Flow) {
 }
 
 func (web *WebAddon) Responseheaders(f *proxy.Flow) {
-	if !f.ConnContext.ClientConn.Tls {
+	if !f.ConnContext.ClientConn.TLS {
 		web.forEachConn(func(c *concurrentConn) {
 			c.trySendConnMessage(f)
 		})

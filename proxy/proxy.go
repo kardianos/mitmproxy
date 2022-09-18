@@ -1,3 +1,4 @@
+// Package proxy implements the MitM Proxy (Forward Proxy).
 package proxy
 
 import (
@@ -7,15 +8,16 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/kardianos/mitmproxy/cert"
 	log "github.com/sirupsen/logrus"
 )
 
 type Options struct {
-	Debug             int
-	Addr              string
-	StreamLargeBodies int64 // 当请求或响应体大于此字节时，转为 stream 模式
-	SslInsecure       bool
-	CaRootPath        string
+	Debug                 int
+	Addr                  string
+	StreamLargeBodies     int64 // When the request or response body is larger then this in bytes, turn into stream model.
+	InsecureSkipVerifyTLS bool
+	CA                    cert.Getter
 }
 
 type Proxy struct {
@@ -42,11 +44,12 @@ func NewProxy(opts *Options) (*Proxy, error) {
 		Addr:    opts.Addr,
 		Handler: proxy,
 		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
-			connCtx := newConnContext(c, proxy)
+			wc := c.(*wrapClientConn)
+			connCtx := newConnContext(wc, proxy)
 			for _, addon := range proxy.Addons {
 				addon.ClientConnected(connCtx.ClientConn)
 			}
-			c.(*wrapClientConn).connCtx = connCtx
+			wc.connCtx = connCtx
 			return context.WithValue(ctx, connContextKey, connCtx)
 		},
 	}
@@ -110,7 +113,7 @@ func (proxy *Proxy) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 
 	if !req.URL.IsAbs() || req.URL.Host == "" {
 		res.WriteHeader(400)
-		_, err := io.WriteString(res, "此为代理服务器，不能直接发起请求")
+		_, err := io.WriteString(res, "This is a proxy server and cannot initiate requests directly.")
 		if err != nil {
 			log.Error(err)
 		}

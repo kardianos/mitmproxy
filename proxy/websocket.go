@@ -10,7 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// 当前仅做了转发 websocket 流量
+// Currently only forwarding websocket flow.
 
 type webSocket struct{}
 

@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/lqqyt2423/go-mitmproxy/proxy"
+	"github.com/kardianos/mitmproxy/proxy"
 	uuid "github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 )
@@ -88,7 +88,7 @@ func newMessageFlow(mType messageType, f *proxy.Flow) *messageFlow {
 	} else if mType == messageTypeRequest {
 		m := make(map[string]interface{})
 		m["request"] = f.Request
-		m["connId"] = f.ConnContext.Id().String()
+		m["connId"] = f.ConnContext.ID().String()
 		content, err = json.Marshal(m)
 	} else if mType == messageTypeRequestBody {
 		content = f.Request.Body
@@ -106,7 +106,7 @@ func newMessageFlow(mType messageType, f *proxy.Flow) *messageFlow {
 
 	id := f.Id
 	if mType == messageTypeConn {
-		id = f.ConnContext.Id()
+		id = f.ConnContext.ID()
 	}
 
 	return &messageFlow{
@@ -119,7 +119,7 @@ func newMessageFlow(mType messageType, f *proxy.Flow) *messageFlow {
 func newMessageConnClose(connCtx *proxy.ConnContext) *messageFlow {
 	return &messageFlow{
 		mType: messageTypeConnClose,
-		id:    connCtx.Id(),
+		id:    connCtx.ID(),
 	}
 }
 

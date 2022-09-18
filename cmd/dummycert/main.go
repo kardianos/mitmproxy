@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/lqqyt2423/go-mitmproxy/cert"
+	"github.com/kardianos/mitmproxy/cert"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -37,12 +37,13 @@ func main() {
 		log.Fatal("commonName required")
 	}
 
-	ca, err := cert.NewCA("")
+	l := &cert.MemoryLoader{}
+	ca, err := cert.New(l)
 	if err != nil {
 		panic(err)
 	}
 
-	cert, err := ca.DummyCert(config.commonName)
+	cert, err := ca.GenerateCert(config.commonName)
 	if err != nil {
 		panic(err)
 	}
