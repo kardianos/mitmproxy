@@ -20,7 +20,7 @@
 ## Install
 
 ```
-go install github.com/kardianos/mitmproxy/cmd/go-mitmproxy@latest
+go install github.com/kardianos/mitmproxy/cmd/mitmproxy@latest
 ```
 
 ## Usage
