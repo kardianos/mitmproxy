@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -33,6 +34,10 @@ func newRequest(req *http.Request) *Request {
 
 func (r *Request) Raw() *http.Request {
 	return r.raw
+}
+
+func (r *Request) WithAttribute(key string, val any) {
+	r.raw = r.raw.WithContext(context.WithValue(r.raw.Context(), key, val))
 }
 
 func (req *Request) MarshalJSON() ([]byte, error) {
